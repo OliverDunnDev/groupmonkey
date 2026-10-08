@@ -22,7 +22,7 @@ export default function Overview() {
 
   return (
     <div className="stack" style={{ gap: 28 }}>
-      <div className="card card--yellow stack">
+      <div className="card card--accent stack">
         <div className="row row--between">
           <h2>Overall progress</h2>
           <span className="big-number">{s.percent}%</span>
@@ -36,7 +36,7 @@ export default function Overview() {
 
       <div className="stats">
         {WORK_STATUSES.map((st) => (
-          <div key={st} className={`stat${st === 'Done' ? ' stat--yellow' : ''}`}>
+          <div key={st} className={`stat${st === 'Done' ? ' stat--accent' : ''}`}>
             <div className="stat-label">{STATUS_LABEL[st]}</div>
             <div className="big-number">{s.byStatus[st] ?? 0}</div>
           </div>
@@ -45,21 +45,8 @@ export default function Overview() {
 
       <div className="grid grid--2" style={{ alignItems: 'start' }}>
         <section className="card stack">
-          <h3>Groups</h3>
-          {s.groups.length === 0 && <Bubble>No groups yet. Create one on the Groups tab.</Bubble>}
-          {s.groups.map((g) => (
-            <div key={g.groupId} className="stack" style={{ gap: 6 }}>
-              <div className="row row--between">
-                <strong><span className="badge" style={{ background: g.color, color: g.color === '#0A0A0A' ? '#FFD400' : undefined }}>&nbsp;</span> {g.name}</strong>
-                <span className="muted">{g.done}/{g.total} · {g.percent}%</span>
-              </div>
-              <ProgressBar percent={g.percent} small label={`${g.name} progress`} />
-            </div>
-          ))}
-        </section>
-
-        <section className="card stack">
           <h3>Team workload</h3>
+          <p className="muted" style={{ fontSize: '0.85rem' }}>Members of {project.groupName}</p>
           {s.members.map((m) => (
             <div key={m.userId} className="stack" style={{ gap: 6 }}>
               <div className="row row--between">
@@ -93,7 +80,7 @@ export default function Overview() {
             <h3>Upcoming deadlines</h3>
             <Link className="btn btn--sm" to="board">Board</Link>
           </div>
-          {upcoming.length === 0 && <Bubble>No open tasks with deadlines.</Bubble>}
+          {upcoming.length === 0 && <Bubble>No deadlines looming. Smooth swinging.</Bubble>}
           <ul className="list">
             {upcoming.map((t) => (
               <li key={t.id} className="list-item">

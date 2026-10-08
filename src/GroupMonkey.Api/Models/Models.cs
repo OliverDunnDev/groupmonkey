@@ -30,16 +30,23 @@ public class Project
     public ProjectStatus Status { get; set; }
     public DateOnly StartDate { get; set; }
     public DateOnly DueDate { get; set; }
+    /// <summary>Who created the project. Access and membership come from the group.</summary>
     public int OwnerId { get; set; }
-    public List<int> MemberIds { get; set; } = [];
+    /// <summary>Every project lives in exactly one group; its members are the group's members.</summary>
+    public int GroupId { get; set; }
 }
 
+/// <summary>
+/// A team of people (and, when AI is on, agents) that owns projects. Managers set groups up and choose the members;
+/// projects inside the group are visible to its members and tasks can only be assigned to them.
+/// </summary>
 public class Group
 {
     public int Id { get; set; }
-    public int ProjectId { get; set; }
     public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
     public string Color { get; set; } = "#FFD400";
+    public int OwnerId { get; set; }
     public List<int> MemberIds { get; set; } = [];
 }
 
@@ -47,7 +54,6 @@ public class TaskItem
 {
     public int Id { get; set; }
     public int ProjectId { get; set; }
-    public int? GroupId { get; set; }
     public int? GoalId { get; set; }
     public int? AssigneeId { get; set; }
     public string Title { get; set; } = "";

@@ -28,7 +28,7 @@ public class AgentRunService(DataStore store, AiSettingsStore settings, IConfigu
             var task = store.Tasks.FirstOrDefault(t => t.Id == taskId);
             if (task is null) return (null, "Task not found.");
             var project = store.Projects.FirstOrDefault(p => p.Id == task.ProjectId);
-            if (project is null || !project.MemberIds.Contains(agentId)) return (null, $"{agent.Name} is not a member of this project.");
+            if (project is null || !store.IsMember(project, agentId)) return (null, $"{agent.Name} is not a member of this project's group.");
 
             if (store.Runs.Any(r => r.TaskId == taskId && r.AgentId == agentId && r.Status is RunStatus.Queued or RunStatus.Running))
                 return (null, $"{agent.Name} is already working on this task.");

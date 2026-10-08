@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useDeleteGoal, useGoals, useSaveGoal, useTasks } from '../api/hooks'
+import { Banana } from '../components/Monkey'
 import { Bubble, ErrorBox, fmtDate, Loading, Modal, ProgressBar } from '../components/ui'
 import { STATUS_LABEL, type Goal } from '../types'
 import { useProjectContext } from './ProjectPage'
@@ -57,16 +58,16 @@ export default function Goals() {
         {project.canManage && <button className="btn btn--black" onClick={() => setModal({})}>+ New goal</button>}
       </div>
       {del.error && <div style={{ marginBottom: 12 }}><ErrorBox error={del.error} /></div>}
-      {goals?.length === 0 && <Bubble>No goals yet. What are we aiming for?</Bubble>}
+      {goals?.length === 0 && <Bubble>No goals yet. Which banana tree are we climbing?</Bubble>}
 
       <div className="grid grid--cards">
         {goals?.map((g) => {
           const linked = tasks.filter((t) => t.goalId === g.id)
           return (
-            <article key={g.id} className={`card stack${g.percent === 100 ? ' card--yellow' : ''}`}>
+            <article key={g.id} className={`card stack${g.percent === 100 ? ' card--accent' : ''}`}>
               <div className="row row--between">
                 <h3>{g.title}</h3>
-                {g.percent === 100 && <span className="badge badge--black">Achieved</span>}
+                {g.percent === 100 && <span className="badge badge--black"><Banana className="inline-icon" onDark />Achieved</span>}
               </div>
               {g.description && <p style={{ fontWeight: 600 }}>{g.description}</p>}
               <div>

@@ -1,10 +1,11 @@
 import { useQueries } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { keys, useAiEnabled, useProjects, useRecentRuns } from '../api/hooks'
+import { keys, useAiEnabled, useGroups, useProjects, useRecentRuns } from '../api/hooks'
 import { useAuth } from '../auth'
 import ApprovalsPanel from '../components/Approvals'
+import { Banana } from '../components/Monkey'
 import ProjectModal from '../components/ProjectModal'
 import { Avatar, Bubble, ErrorBox, fmtDate, isOverdue, Loading, ProgressBar, relTime, useUserMap } from '../components/ui'
 import type { Task } from '../types'
@@ -42,9 +43,9 @@ function AgentActivity() {
 
 export default function Dashboard() {
   const { user } = useAuth()
-  const navigate = useNavigate()
   const aiEnabled = useAiEnabled()
   const { data: projects, isLoading, error } = useProjects()
+  const { data: groups = [] } = useGroups()
   const [creating, setCreating] = useState(false)
 
   const taskQueries = useQueries({
@@ -74,28 +75,36 @@ export default function Dashboard() {
       <div className="page-head">
         <div>
           <h1 className="title-bar">Dashboard</h1>
-          <p className="sub">Welcome back, {user?.name.split(' ')[0]}. Here is where everything stands.</p>
+          <p className="sub">Welcome back, {user?.name.split(' ')[0]}. Here's how the troop is doing.</p>
         </div>
         {canCreate && <button className="btn btn--black" onClick={() => setCreating(true)}>+ New project</button>}
       </div>
 
       <div className="stats" style={{ marginBottom: 28 }}>
-        <div className="stat stat--yellow"><div className="stat-label">Projects</div><div className="big-number">{projects?.length ?? 0}</div></div>
+        <div className="stat"><div className="stat-label">Groups</div><div className="big-number">{groups.length}</div></div>
+        <div className="stat stat--accent"><div className="stat-label">Projects</div><div className="big-number">{projects?.length ?? 0}</div></div>
         <div className="stat"><div className="stat-label">Total tasks</div><div className="big-number">{total}</div></div>
-        <div className="stat"><div className="stat-label">Completed</div><div className="big-number">{done}</div></div>
-        <div className="stat stat--yellow"><div className="stat-label">Overall progress</div><div className="big-number">{overall}%</div></div>
+        <div className="stat"><div className="stat-label"><Banana className="inline-icon" />Bananas done</div><div className="big-number">{done}</div></div>
+        <div className="stat stat--accent"><div className="stat-label">Overall progress</div><div className="big-number">{overall}%</div></div>
       </div>
 
       {aiEnabled && canCreate && <div style={{ marginBottom: 28 }}><ApprovalsPanel hideWhenEmpty /></div>}
 
       <div className="grid grid--2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))', alignItems: 'start' }}>
         <section>
-          <h2 style={{ marginBottom: 14 }}>Projects</h2>
-          {projects?.length === 0 ? (
-            <Bubble>No projects yet. {canCreate ? 'Start one!' : 'Ask a manager to add you to one.'}</Bubble>
-          ) : (
-            <div className="grid grid--cards">
-              {projects?.map((p) => (
+          <h2 style={{ marginBottom: 14 }}>Projects by group</h2>
+          {groups.length === 0 && <Bubble>{canCreate ? 'No groups yet. Gather your troop: create a group, then add projects to it.' : "You aren't in any groups yet. Ask a manager to add you."}</Bubble>}
+          {groups.map((g) => {
+            const groupProjects = projects?.filter((p) => p.groupId === g.id) ?? []
+            return (
+              <div key={g.id} style={{ marginBottom: 26 }}>
+                <div className="row row--between group-head" style={{ borderColor: g.color === '#FFFFFF' ? '#0A0A0A' : g.color }}>
+                  <Link to="/groups" className="group-name">{g.name}</Link>
+                  <span className="muted">{g.memberIds.length} member{g.memberIds.length === 1 ? '' : 's'} · {g.projectCount} project{g.projectCount === 1 ? '' : 's'}</span>
+                </div>
+                {groupProjects.length === 0 && <p className="muted" style={{ marginTop: 8 }}>No projects in this group yet.</p>}
+                <div className="grid grid--cards" style={{ marginTop: 14 }}>
+              {groupProjects.map((p) => (
                 <Link key={p.id} to={`/projects/${p.id}`} className="card card--link stack">
                   <div className="row row--between">
                     <h3>{p.name}</h3>
@@ -112,14 +121,16 @@ export default function Dashboard() {
                   <span className="muted">Due {fmtDate(p.dueDate)}</span>
                 </Link>
               ))}
-            </div>
-          )}
+                </div>
+              </div>
+            )
+          })}
         </section>
 
         <section>
           <h2 style={{ marginBottom: 14 }}>My tasks</h2>
           {myTasks.length === 0 ? (
-            <Bubble>Nothing assigned to you. Nice and quiet!</Bubble>
+            <Bubble>No tasks on your branch. Time for a banana break?</Bubble>
           ) : (
             <ul className="list">
               {myTasks.map((t) => (
@@ -139,7 +150,7 @@ export default function Dashboard() {
         </section>
       </div>
 
-      {creating && <ProjectModal onClose={() => setCreating(false)} onSaved={(p) => navigate(`/projects/${p.id}`)} />}
+      {creating && <ProjectModal onClose={() => setCreating(false)} />}
     </>
   )
 }

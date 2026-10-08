@@ -3,15 +3,15 @@ import {
   type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core'
 import { useState } from 'react'
-import { useAiEnabled, useGroups, useMoveTask, useRecentRuns, useTasks } from '../api/hooks'
+import { useAiEnabled, useMoveTask, useRecentRuns, useTasks } from '../api/hooks'
+import { Banana } from '../components/Monkey'
 import TaskModal from '../components/TaskModal'
 import { Avatar, ErrorBox, fmtDate, isOverdue, Loading, useUserMap } from '../components/ui'
-import { isActiveRun, STATUS_LABEL, WORK_STATUSES, type Group, type Task, type WorkStatus } from '../types'
+import { isActiveRun, STATUS_LABEL, WORK_STATUSES, type Task, type WorkStatus } from '../types'
 import { useProjectContext } from './ProjectPage'
 
-function TaskCard({ task, group, overlay, working, onOpen }: {
+function TaskCard({ task, overlay, working, onOpen }: {
   task: Task
-  group?: Group
   overlay?: boolean
   working?: boolean
   onOpen?: () => void
@@ -37,7 +37,6 @@ function TaskCard({ task, group, overlay, working, onOpen }: {
       <span className="task-title">{task.title}</span>
       <div className="task-meta">
         <span className={`badge priority-${task.priority}`}>{task.priority}</span>
-        {group && <span className="badge" style={{ background: group.color, color: group.color === '#0A0A0A' ? '#FFD400' : undefined }}>{group.name}</span>}
       </div>
       <div className="task-foot">
         <span className={overdue ? 'overdue-text' : 'muted'} style={{ fontSize: '0.85rem' }}>
@@ -49,10 +48,9 @@ function TaskCard({ task, group, overlay, working, onOpen }: {
   )
 }
 
-function Column({ status, tasks, groups, working, onAdd, onOpen }: {
+function Column({ status, tasks, working, onAdd, onOpen }: {
   status: WorkStatus
   tasks: Task[]
-  groups: Map<number, Group>
   working: Set<number>
   onAdd: () => void
   onOpen: (t: Task) => void
@@ -61,12 +59,12 @@ function Column({ status, tasks, groups, working, onAdd, onOpen }: {
   return (
     <section ref={setNodeRef} className={`column${isOver ? ' is-over' : ''}`} aria-label={STATUS_LABEL[status]}>
       <div className="column-head">
-        <h3>{STATUS_LABEL[status]}</h3>
+        <h3>{status === 'Done' && <Banana className="inline-icon" onDark />}{STATUS_LABEL[status]}</h3>
         <span className="count">{tasks.length}</span>
       </div>
       <div className="column-body">
         {tasks.map((t) => (
-          <TaskCard key={t.id} task={t} group={t.groupId ? groups.get(t.groupId) : undefined} working={working.has(t.id)} onOpen={() => onOpen(t)} />
+          <TaskCard key={t.id} task={t} working={working.has(t.id)} onOpen={() => onOpen(t)} />
         ))}
         <button className="btn btn--sm" onClick={onAdd}>+ Add task</button>
       </div>
@@ -77,7 +75,6 @@ function Column({ status, tasks, groups, working, onAdd, onOpen }: {
 export default function Board() {
   const { project } = useProjectContext()
   const { data: tasks, isLoading, error } = useTasks(project.id)
-  const { data: groups = [] } = useGroups(project.id)
   const move = useMoveTask(project.id)
   const aiEnabled = useAiEnabled()
   const { data: recent } = useRecentRuns(aiEnabled)
@@ -93,8 +90,6 @@ export default function Board() {
 
   if (isLoading) return <Loading />
   if (error) return <ErrorBox error={error} />
-
-  const groupMap = new Map(groups.map((g) => [g.id, g]))
 
   function onDragStart(e: DragStartEvent) {
     setDragging(tasks?.find((t) => t.id === e.active.id) ?? null)
@@ -124,14 +119,13 @@ export default function Board() {
               key={st}
               status={st}
               tasks={(tasks ?? []).filter((t) => t.status === st)}
-              groups={groupMap}
               working={working}
               onAdd={() => setModal({ status: st })}
               onOpen={(task) => setModal({ task })}
             />
           ))}
         </div>
-        <DragOverlay>{dragging && <TaskCard task={dragging} overlay group={dragging.groupId ? groupMap.get(dragging.groupId) : undefined} />}</DragOverlay>
+        <DragOverlay>{dragging && <TaskCard task={dragging} overlay />}</DragOverlay>
       </DndContext>
 
       {modal && <TaskModal project={project} task={modal.task} defaultStatus={modal.status} onClose={() => setModal(null)} />}

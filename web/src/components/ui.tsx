@@ -1,6 +1,7 @@
 import { useEffect, useMemo, type ReactNode } from 'react'
 import { useUsers } from '../api/hooks'
 import type { User, WorkStatus } from '../types'
+import { MonkeyFace } from './Monkey'
 
 export function initials(name: string) {
   return name
@@ -112,13 +113,19 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
 }
 
 export function Loading() {
-  return <div className="loading">LOADING...</div>
+  return <div className="loading">SWINGING IN...</div>
 }
 
 export function ErrorBox({ error }: { error: unknown }) {
   return <div className="alert" role="alert">{error instanceof Error ? error.message : 'Something went wrong.'}</div>
 }
 
+/** Empty-state speech bubble, with the monkey peeking over the top. */
 export function Bubble({ children }: { children: ReactNode }) {
-  return <div className="bubble">{children}</div>
+  return (
+    <div className="bubble">
+      <span className="bubble-monkey"><MonkeyFace /></span>
+      {children}
+    </div>
+  )
 }

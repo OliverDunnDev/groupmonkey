@@ -1,6 +1,6 @@
 # GroupMonkey
 
-Project management app: organise groups per project, assign tasks, track progress and view goals.
+Project management app. **Groups** are teams that managers set up with chosen members; each group owns **projects**, and each project's tasks are assigned to members of the group. Track progress and goals along the way.
 .NET 10 minimal API + React 19 (Vite, TypeScript). Data is **mock and in-memory** (resets when the API restarts).
 
 It also has an optional **AI agents** feature: Claude-powered teammates you can assign tasks to. See [AI agents](#ai-agents-optional).
@@ -41,7 +41,7 @@ background. The agent reads the project, posts its work as a comment, and moves 
 **Try it in demo mode (no key needed):**
 
 1. Log in as Ava Admin, open **AI settings**, and switch AI agents **ON**. You'll see a DEMO MODE banner.
-2. Two demo agents appear: **Scout** (research, "Ask first") and **Patch** (QA, comments only).
+2. Two demo agents appear, as members of the Web Team and Mobile Team groups: **Scout** (research, "Ask first") and **Patch** (QA, comments only).
 3. Open a task on a board, assign it to Scout, save, then reopen the task to see the run timeline and comment.
    Scout's move to Review waits in **Awaiting your approval** (Dashboard, Agents page, or the task itself).
 4. **Agents > New agent** creates your own from a template (Researcher, Writer, QA reviewer, Triage) or from scratch.
@@ -66,7 +66,7 @@ variable). A key entered in the admin screen takes precedence. The bare `ANTHROP
 - **Autonomy per agent:** *Suggest* (comments only), *Ask first* (changes wait for a manager's approval), or *Autonomous*.
 - **Limited tools.** Agents act only through a small tool layer (`src/GroupMonkey.Api/Ai/ProjectTools.cs`): read the
   project, comment, change the status of *their own* tasks, create tasks, assign tasks to people, and ask a question.
-  There is no tool to delete anything, change project membership, or hand work to another agent. Marking work **Done**
+  There is no tool to delete anything, change group membership, or hand work to another agent. Marking work **Done**
   is reserved for Autonomous agents.
 - **Scoped to one project per run**, and only projects the agent is a member of.
 - **Bounded cost:** a daily run limit per agent, plus a cap on turns and tokens per run.

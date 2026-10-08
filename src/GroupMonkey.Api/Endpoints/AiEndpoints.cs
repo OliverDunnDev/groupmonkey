@@ -116,9 +116,9 @@ public static partial class AiEndpoints
         var today = DateTime.UtcNow.Date;
         var runs = s.Runs.Where(r => r.AgentId == c.UserId).ToList();
         var last = runs.OrderByDescending(r => r.CreatedAt).FirstOrDefault();
-        var projects = s.Projects.Where(pr => pr.MemberIds.Contains(c.UserId) && Access.CanView(viewer, pr)).Select(pr => pr.Id).ToList();
+        var groups = s.Groups.Where(g => g.MemberIds.Contains(c.UserId) && Access.CanViewGroup(viewer, g)).Select(g => g.Id).ToList();
         return new AgentDto(c.UserId, user.Name, user.Color, c.Description, c.Instructions, c.Model, c.Autonomy, [.. c.AllowedTools],
-            c.Enabled, c.DailyRunLimit, projects, runs.Count(r => r.CreatedAt >= today), last?.Status, last?.CreatedAt,
+            c.Enabled, c.DailyRunLimit, groups, runs.Count(r => r.CreatedAt >= today), last?.Status, last?.CreatedAt,
             runs.Count(r => r.Status is RunStatus.Queued or RunStatus.Running), CanEditAgent(viewer, c));
     }
 
@@ -142,21 +142,15 @@ public static partial class AiEndpoints
         return null;
     }
 
-    private static void SyncProjects(DataStore s, User me, int agentId, List<int> wanted)
+    /// <summary>Puts the agent in exactly the wanted groups, among the groups this person is allowed to manage.</summary>
+    private static void SyncGroups(DataStore s, User me, int agentId, List<int> wanted)
     {
-        foreach (var pr in s.Projects.Where(pr => Access.CanManage(me, pr)).ToList())
+        foreach (var g in s.Groups.Where(g => Access.CanManageGroup(me, g)).ToList())
         {
-            var isMember = pr.MemberIds.Contains(agentId);
-            if (wanted.Contains(pr.Id) && !isMember) pr.MemberIds.Add(agentId);
-            else if (!wanted.Contains(pr.Id) && isMember) RemoveFromProject(s, pr, agentId);
+            var isMember = g.MemberIds.Contains(agentId);
+            if (wanted.Contains(g.Id) && !isMember) g.MemberIds.Add(agentId);
+            else if (!wanted.Contains(g.Id) && isMember) ApiEndpoints.RemoveFromGroup(s, g, agentId);
         }
-    }
-
-    private static void RemoveFromProject(DataStore s, Project pr, int agentId)
-    {
-        pr.MemberIds.Remove(agentId);
-        foreach (var g in s.Groups.Where(g => g.ProjectId == pr.Id)) g.MemberIds.Remove(agentId);
-        foreach (var t in s.Tasks.Where(t => t.ProjectId == pr.Id && t.AssigneeId == agentId)) t.AssigneeId = null;
     }
 
     private static IResult ListAgents(ClaimsPrincipal p, DataStore s)
@@ -167,7 +161,7 @@ public static partial class AiEndpoints
             var me = Human(s, p);
             if (me is null) return Results.Unauthorized();
             var list = s.Agents
-                .Where(c => me.Role == Role.Admin || s.Projects.Any(pr => pr.MemberIds.Contains(c.UserId) && Access.CanView(me, pr)) || c.CreatedBy == me.Id)
+                .Where(c => me.Role == Role.Admin || s.Groups.Any(g => g.MemberIds.Contains(c.UserId) && Access.CanViewGroup(me, g)) || c.CreatedBy == me.Id)
                 .Select(c => AgentToDto(s, c, me)).ToList();
             return Results.Ok(list);
         }
@@ -183,11 +177,11 @@ public static partial class AiEndpoints
             if (me.Role == Role.Member) return Results.Forbid();
             if (ValidateAgent(s, input, null) is { } err) return ApiEndpoints.Invalid(err);
 
-            var wanted = input.ProjectIds ?? [];
-            foreach (var pid in wanted)
+            var wanted = input.GroupIds ?? [];
+            foreach (var gid in wanted)
             {
-                var pr = s.Projects.FirstOrDefault(x => x.Id == pid);
-                if (pr is null || !Access.CanManage(me, pr)) return ApiEndpoints.Invalid("You can only add agents to projects you manage.");
+                var g = s.Groups.FirstOrDefault(x => x.Id == gid);
+                if (g is null || !Access.CanManageGroup(me, g)) return ApiEndpoints.Invalid("You can only add agents to groups you manage.");
             }
 
             var name = input.Name.Trim();
@@ -206,7 +200,7 @@ public static partial class AiEndpoints
                 Enabled = input.Enabled ?? true, DailyRunLimit = input.DailyRunLimit ?? 20, CreatedBy = me.Id,
             };
             s.Agents.Add(cfg);
-            SyncProjects(s, me, user.Id, wanted);
+            SyncGroups(s, me, user.Id, wanted);
             return Results.Created($"/api/agents/{user.Id}", AgentToDto(s, cfg, me));
         }
     }
@@ -235,7 +229,7 @@ public static partial class AiEndpoints
             if (input.AllowedTools is { } t) cfg.AllowedTools = [.. t.Distinct()];
             cfg.Enabled = input.Enabled ?? cfg.Enabled;
             cfg.DailyRunLimit = input.DailyRunLimit ?? cfg.DailyRunLimit;
-            if (input.ProjectIds is { } wanted) SyncProjects(s, me, id, wanted);
+            if (input.GroupIds is { } wanted) SyncGroups(s, me, id, wanted);
             return Results.Ok(AgentToDto(s, cfg, me));
         }
     }
@@ -251,7 +245,7 @@ public static partial class AiEndpoints
             if (cfg is null) return Results.NotFound();
             if (!CanEditAgent(me, cfg)) return Results.Forbid();
 
-            foreach (var pr in s.Projects.Where(pr => pr.MemberIds.Contains(id)).ToList()) RemoveFromProject(s, pr, id);
+            foreach (var g in s.Groups.Where(g => g.MemberIds.Contains(id)).ToList()) ApiEndpoints.RemoveFromGroup(s, g, id);
             s.Actions.RemoveAll(a => a.AgentId == id);
             s.Runs.RemoveAll(r => r.AgentId == id);
             s.Agents.Remove(cfg);
@@ -301,7 +295,7 @@ public static partial class AiEndpoints
         {
             var me = Human(s, p);
             if (me is null) return Results.Unauthorized();
-            var viewable = s.Projects.Where(pr => Access.CanView(me, pr)).Select(pr => pr.Id).ToHashSet();
+            var viewable = s.Projects.Where(pr => Access.CanView(s, me, pr)).Select(pr => pr.Id).ToHashSet();
             var list = s.Runs.Where(r => viewable.Contains(r.ProjectId)).OrderByDescending(r => r.CreatedAt).Take(12)
                 .Select(r => new RunSummaryDto(r.Id, r.AgentId, r.TaskId, r.ProjectId,
                     s.Tasks.FirstOrDefault(t => t.Id == r.TaskId)?.Title ?? "(deleted task)", r.Status, r.CreatedAt, r.EndedAt, r.Provider))
@@ -320,7 +314,7 @@ public static partial class AiEndpoints
             var me = Human(s, p);
             if (me is null) return Results.Unauthorized();
             var list = s.Actions
-                .Where(a => a.State == ActionState.Pending && s.Projects.Any(pr => pr.Id == a.ProjectId && Access.CanManage(me, pr)))
+                .Where(a => a.State == ActionState.Pending && s.Projects.Any(pr => pr.Id == a.ProjectId && Access.CanManage(s, me, pr)))
                 .OrderBy(a => a.CreatedAt).Select(a => ActionToDto(s, a)).ToList();
             return Results.Ok(list);
         }
@@ -335,8 +329,8 @@ public static partial class AiEndpoints
             if (me is null) return Results.Unauthorized();
             var action = s.Actions.FirstOrDefault(a => a.Id == id);
             var project = action is null ? null : s.Projects.FirstOrDefault(pr => pr.Id == action.ProjectId);
-            if (action is null || project is null || !Access.CanView(me, project)) return Results.NotFound();
-            if (!Access.CanManage(me, project)) return Results.Forbid();
+            if (action is null || project is null || !Access.CanView(s, me, project)) return Results.NotFound();
+            if (!Access.CanManage(s, me, project)) return Results.Forbid();
             if (action.State != ActionState.Pending) return ApiEndpoints.Invalid("That proposal has already been decided.");
 
             var run = s.Runs.FirstOrDefault(r => r.Id == action.RunId);

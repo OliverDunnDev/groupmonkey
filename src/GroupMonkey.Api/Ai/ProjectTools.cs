@@ -23,7 +23,7 @@ public static class ToolCatalog
     public static readonly ToolSpec[] All =
     [
         new(AgentTools.GetProjectSummary,
-            "Get an overview of the project: description, dates, overall progress, goals, groups and team members.",
+            "Get an overview of the project: description, dates, overall progress, goals, the group it belongs to, and the team members.",
             [], []),
         new(AgentTools.ListTasks,
             "List tasks in the project, optionally filtered by status or assignee.",
@@ -55,7 +55,6 @@ public static class ToolCatalog
                 ["assignee_id"] = P("integer", "Optional user id of a human project member."),
                 ["due_date"] = P("string", "Optional due date, YYYY-MM-DD."),
                 ["goal_id"] = P("integer", "Optional goal id."),
-                ["group_id"] = P("integer", "Optional group id."),
             }, ["title"]),
         new(AgentTools.AssignTask,
             "Assign a task to a human project member, or unassign it by passing null.",
@@ -98,7 +97,7 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
             if (!AgentTools.All.Contains(name)) return Err($"Unknown tool '{name}'.");
             if (!AgentTools.Read.Contains(name) && !cfg.AllowedTools.Contains(name)) return Err($"The tool '{name}' is not enabled for you.");
             var proj = s.Projects.FirstOrDefault(p => p.Id == run.ProjectId);
-            if (proj is null || !proj.MemberIds.Contains(agent.Id)) return Err("You are not a member of this project.");
+            if (proj is null || !s.IsMember(proj, agent.Id)) return Err("You are not a member of this project's group.");
 
             try
             {
@@ -162,8 +161,8 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
             progress = new { sum.Total, sum.Done, sum.Percent, sum.Overdue, sum.ByStatus },
             goals = s.Goals.Where(g => g.ProjectId == p.Id).Select(g => Progress.ToDto(s, g))
                 .Select(g => new { g.Id, g.Title, g.Description, target = g.TargetDate, g.TaskCount, g.DoneCount, g.Percent }),
-            groups = s.Groups.Where(g => g.ProjectId == p.Id).Select(g => new { g.Id, g.Name, members = g.MemberIds.Select(m => Name(m)) }),
-            team = p.MemberIds.Select(id => new { id, name = Name(id), kind = s.IsAgent(id) ? "Agent" : "Human" }),
+            group = s.GroupOf(p) is { } grp ? new { grp.Id, grp.Name, grp.Description } : null,
+            team = s.MembersOf(p).Select(id => new { id, name = Name(id), kind = s.IsAgent(id) ? "Agent" : "Human" }),
         }));
     }
 
@@ -175,7 +174,7 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
         return Ok(J(q.Take(100).Select(t => new
         {
             t.Id, t.Title, t.Status, t.Priority, assignee = Name(t.AssigneeId), assignee_id = t.AssigneeId,
-            due = t.DueDate, goal_id = t.GoalId, group_id = t.GroupId,
+            due = t.DueDate, goal_id = t.GoalId,
         })));
     }
 
@@ -191,7 +190,6 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
     {
         t.Id, t.Title, t.Description, t.Status, t.Priority, assignee = Name(t.AssigneeId), due = t.DueDate,
         goal = s.Goals.FirstOrDefault(g => g.Id == t.GoalId)?.Title,
-        group = s.Groups.FirstOrDefault(g => g.Id == t.GroupId)?.Name,
         comments = s.Comments.Where(c => c.TaskId == t.Id).OrderBy(c => c.CreatedAt).TakeLast(20)
             .Select(c => new { author = Name(c.AuthorId), kind = s.IsAgent(c.AuthorId) ? "Agent" : "Human", at = c.CreatedAt, c.Body }),
     });
@@ -243,7 +241,7 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
                 var priority = Priority.Medium;
                 if (Str(a, "priority") is { } pr && !Enum.TryParse(pr, true, out priority)) return Err("Priority must be Low, Medium, High or Urgent.");
                 var assignee = Int(a, "assignee_id");
-                if (assignee is { } who && (!p.MemberIds.Contains(who) || s.IsAgent(who))) return Err("The assignee must be a human member of this project.");
+                if (assignee is { } who && (!s.IsMember(p, who) || s.IsAgent(who))) return Err("The assignee must be a human member of this project's group.");
                 DateOnly? due = null;
                 if (Str(a, "due_date") is { } d)
                 {
@@ -252,14 +250,12 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
                 }
                 var goal = Int(a, "goal_id");
                 if (goal is { } g && !s.Goals.Any(x => x.Id == g && x.ProjectId == p.Id)) return Err("Goal not found in this project.");
-                var group = Int(a, "group_id");
-                if (group is { } gr && !s.Groups.Any(x => x.Id == gr && x.ProjectId == p.Id)) return Err("Group not found in this project.");
                 var summary = $"Create task \"{Clip(title, 120)}\"" + (assignee is null ? "" : $" assigned to {Name(assignee)}");
                 if (!apply) return Ok(summary);
                 var t = new TaskItem
                 {
                     Id = s.NextTaskId(), ProjectId = p.Id, Title = Clip(title, 200), Description = Clip(Str(a, "description") ?? "", 4000),
-                    Status = WorkStatus.Todo, Priority = priority, AssigneeId = assignee, GoalId = goal, GroupId = group, DueDate = due,
+                    Status = WorkStatus.Todo, Priority = priority, AssigneeId = assignee, GoalId = goal, DueDate = due,
                 };
                 s.Tasks.Add(t);
                 return Ok($"Created task #{t.Id}.");
@@ -270,7 +266,7 @@ public class ProjectTools(DataStore s, User agent, AgentConfig cfg, AgentRun run
                 if (t is null) return Err("Task not found in this project.");
                 if (!a.ContainsKey("assignee_id")) return Err("assignee_id is required (use null to unassign).");
                 var assignee = Int(a, "assignee_id");
-                if (assignee is { } who && (!p.MemberIds.Contains(who) || s.IsAgent(who))) return Err("The assignee must be a human member of this project.");
+                if (assignee is { } who && (!s.IsMember(p, who) || s.IsAgent(who))) return Err("The assignee must be a human member of this project's group.");
                 var summary = $"Assign task #{t.Id} \"{t.Title}\" to {Name(assignee)}";
                 if (apply) t.AssigneeId = assignee;
                 return Ok(apply ? $"Task #{t.Id} is now assigned to {Name(assignee)}." : summary);

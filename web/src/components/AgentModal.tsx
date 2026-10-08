@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useAgentTemplates, useAiSettings, useProjects, useSaveAgent } from '../api/hooks'
+import { useAgentTemplates, useAiSettings, useGroups, useSaveAgent } from '../api/hooks'
 import { useAuth } from '../auth'
 import {
   AUTONOMY_OPTIONS, MODEL_LABEL, TOOL_OPTIONS, type Agent, type AgentTemplate, type Autonomy,
@@ -12,7 +12,7 @@ const MODELS = Object.keys(MODEL_LABEL)
 export default function AgentModal({ agent, onClose }: { agent?: Agent; onClose: () => void }) {
   const { user } = useAuth()
   const { data: templates = [] } = useAgentTemplates(!agent)
-  const { data: projects = [] } = useProjects()
+  const { data: groups = [] } = useGroups()
   const { data: settings } = useAiSettings(user?.role === 'Admin')
   const save = useSaveAgent(agent?.userId)
 
@@ -25,10 +25,10 @@ export default function AgentModal({ agent, onClose }: { agent?: Agent; onClose:
   const [limit, setLimit] = useState(agent?.dailyRunLimit ?? 20)
   const [enabled, setEnabled] = useState(agent?.enabled ?? true)
   const [color, setColor] = useState(agent?.color ?? AGENT_COLORS[0]!)
-  const [projectIds, setProjectIds] = useState<number[]>(agent?.projectIds ?? [])
+  const [groupIds, setGroupIds] = useState<number[]>(agent?.groupIds ?? [])
   const [template, setTemplate] = useState<string | null>(null)
 
-  const manageable = projects.filter((p) => p.canManage)
+  const manageable = groups.filter((g) => g.canManage)
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
 
   function applyTemplate(t: AgentTemplate) {
@@ -44,7 +44,7 @@ export default function AgentModal({ agent, onClose }: { agent?: Agent; onClose:
   function submit(e: FormEvent) {
     e.preventDefault()
     save.mutate(
-      { name, description, instructions, model: model || null, autonomy, allowedTools: tools, enabled, dailyRunLimit: limit, projectIds, color },
+      { name, description, instructions, model: model || null, autonomy, allowedTools: tools, enabled, dailyRunLimit: limit, groupIds, color },
       { onSuccess: onClose },
     )
   }
@@ -128,16 +128,17 @@ export default function AgentModal({ agent, onClose }: { agent?: Agent; onClose:
           </div>
 
           <div className="field full">
-            <label>Which projects is it on?</label>
+            <label>Which groups is it in?</label>
             <div className="row">
-              {manageable.length === 0 && <span className="muted">You don't manage any projects yet.</span>}
-              {manageable.map((p) => (
-                <label key={p.id} className="chip" style={{ cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
-                  <input type="checkbox" checked={projectIds.includes(p.id)} onChange={() => setProjectIds((x) => toggle(x, p.id))} />
-                  {p.name}
+              {manageable.length === 0 && <span className="muted">You don't manage any groups yet.</span>}
+              {manageable.map((g) => (
+                <label key={g.id} className="chip" style={{ cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+                  <input type="checkbox" checked={groupIds.includes(g.id)} onChange={() => setGroupIds((x) => toggle(x, g.id))} />
+                  {g.name}
                 </label>
               ))}
             </div>
+            <span className="muted" style={{ fontSize: '0.8rem' }}>The agent works on the projects of every group it is in.</span>
           </div>
 
           <label className="chip full" style={{ cursor: 'pointer', width: 'fit-content', textTransform: 'none', letterSpacing: 0 }}>

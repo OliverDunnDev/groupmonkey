@@ -32,6 +32,30 @@ public class DataStore
 
     public bool IsAgent(int userId) => Users.Any(u => u.Id == userId && u.Kind == UserKind.Agent);
 
+    /// <summary>Removes a task and everything that hangs off it (comments, agent runs, proposals). Call inside the lock.</summary>
+    public void DeleteTask(TaskItem t)
+    {
+        Comments.RemoveAll(c => c.TaskId == t.Id);
+        Actions.RemoveAll(a => a.TaskId == t.Id);
+        Runs.RemoveAll(r => r.TaskId == t.Id);
+        Tasks.Remove(t);
+    }
+
+    /// <summary>Removes a project with its tasks, goals and agent activity. Call inside the lock.</summary>
+    public void DeleteProject(Project p)
+    {
+        foreach (var t in Tasks.Where(t => t.ProjectId == p.Id).ToList()) DeleteTask(t);
+        Goals.RemoveAll(g => g.ProjectId == p.Id);
+        Projects.Remove(p);
+    }
+
+    public Group? GroupOf(Project p) => Groups.FirstOrDefault(g => g.Id == p.GroupId);
+
+    /// <summary>Everyone (people and agents) who works on a project: the members of its group.</summary>
+    public List<int> MembersOf(Project p) => GroupOf(p)?.MemberIds ?? [];
+
+    public bool IsMember(Project p, int userId) => MembersOf(p).Contains(userId);
+
     /// <summary>Filters agent ids out of member lists while the AI feature is off.</summary>
     public List<int> Visible(IEnumerable<int> ids) =>
         AiEnabled ? [.. ids] : [.. ids.Where(id => !IsAgent(id))];

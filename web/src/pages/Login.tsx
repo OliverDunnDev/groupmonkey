@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { MonkeyFace } from '../components/Monkey'
 import { useAuth } from '../auth'
 
 // Mock accounts seeded by the API. Shown as quick-fill buttons for the demo.
@@ -40,7 +41,9 @@ export default function Login() {
   return (
     <div className="login">
       <div className="card login-card stack">
+        <span className="login-monkey-wrap"><MonkeyFace /></span>
         <div className="brand">GroupMonkey</div>
+        <p className="login-tagline">Swing into your projects</p>
         <form className="stack" onSubmit={submit}>
           <div className="field">
             <label htmlFor="email">Email</label>

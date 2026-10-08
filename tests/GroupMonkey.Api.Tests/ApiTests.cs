@@ -99,24 +99,25 @@ public class ApiTests(WebApplicationFactory<Program> factory) : IClassFixture<We
     [Fact]
     public async Task Group_membership_add_and_remove()
     {
+        // Platform & Ops (group 3) does not include Priya; Marcus is a manager in it.
         var mgr = await LoginAs(NewClient(), "manager@groupmonkey.dev");
-        var added = await mgr.PostAsync("/api/groups/1/members/4", null);
+        var added = await mgr.PostAsync("/api/groups/3/members/3", null);
         added.EnsureSuccessStatusCode();
         var g = (await added.Content.ReadFromJsonAsync<GroupDto>(Json))!;
-        Assert.Contains(4, g.MemberIds);
+        Assert.Contains(3, g.MemberIds);
 
-        var removed = await mgr.DeleteAsync("/api/groups/1/members/4");
+        var removed = await mgr.DeleteAsync("/api/groups/3/members/3");
         var g2 = (await removed.Content.ReadFromJsonAsync<GroupDto>(Json))!;
-        Assert.DoesNotContain(4, g2.MemberIds);
+        Assert.DoesNotContain(3, g2.MemberIds);
     }
 
     [Fact]
     public async Task Member_cannot_create_group_or_project()
     {
         var member = await LoginAs(NewClient(), "member@groupmonkey.dev");
-        var g = await member.PostAsJsonAsync("/api/projects/1/groups", new GroupInput("Nope", null), Json);
+        var g = await member.PostAsJsonAsync("/api/groups", new GroupInput("Nope", null, null, null), Json);
         Assert.Equal(HttpStatusCode.Forbidden, g.StatusCode);
-        var p = await member.PostAsJsonAsync("/api/projects", new ProjectInput("Nope", null, null, null, null, null), Json);
+        var p = await member.PostAsJsonAsync("/api/projects", new ProjectInput("Nope", null, null, null, null, 1), Json);
         Assert.Equal(HttpStatusCode.Forbidden, p.StatusCode);
     }
 
@@ -124,13 +125,14 @@ public class ApiTests(WebApplicationFactory<Program> factory) : IClassFixture<We
     public async Task Manager_can_create_project_and_task()
     {
         var mgr = await LoginAs(NewClient(), "manager@groupmonkey.dev");
-        var pr = await mgr.PostAsJsonAsync("/api/projects", new ProjectInput("Fresh", "desc", null, null, null, [3]), Json);
+        var pr = await mgr.PostAsJsonAsync("/api/projects", new ProjectInput("Fresh", "desc", null, null, null, 1), Json);
         Assert.Equal(HttpStatusCode.Created, pr.StatusCode);
         var proj = (await pr.Content.ReadFromJsonAsync<ProjectDto>(Json))!;
-        Assert.Contains(2, proj.MemberIds);
+        Assert.Equal(1, proj.GroupId);
+        Assert.Contains(3, proj.MemberIds); // members come from the group
 
         var t = await mgr.PostAsJsonAsync($"/api/projects/{proj.Id}/tasks",
-            new TaskInput("First task", null, null, Priority.High, 3, null, null, null), Json);
+            new TaskInput("First task", null, null, Priority.High, 3, null, null), Json);
         Assert.Equal(HttpStatusCode.Created, t.StatusCode);
     }
 

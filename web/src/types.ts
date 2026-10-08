@@ -89,7 +89,7 @@ export interface Agent {
   allowedTools: string[]
   enabled: boolean
   dailyRunLimit: number
-  projectIds: number[]
+  groupIds: number[]
   runsToday: number
   lastRunStatus: RunStatus | null
   lastRunAt: string | null
@@ -116,7 +116,7 @@ export interface AgentInput {
   allowedTools: string[]
   enabled: boolean
   dailyRunLimit: number
-  projectIds: number[]
+  groupIds: number[]
   color: string
 }
 
@@ -192,6 +192,10 @@ export interface Project {
   startDate: string
   dueDate: string
   ownerId: number
+  /** The group this project lives in. Its members are the project's members. */
+  groupId: number
+  groupName: string
+  /** Derived from the group. */
   memberIds: number[]
   taskCount: number
   doneCount: number
@@ -200,21 +204,32 @@ export interface Project {
   canEdit: boolean
 }
 
+/** A team. Managers set groups up and choose members; projects live inside a group. */
 export interface Group {
   id: number
-  projectId: number
   name: string
+  description: string
   color: string
+  ownerId: number
   memberIds: number[]
+  projectCount: number
   taskCount: number
   doneCount: number
   percent: number
+  canManage: boolean
+  canEdit: boolean
+}
+
+export interface GroupInput {
+  name: string
+  description: string
+  color: string
+  memberIds: number[]
 }
 
 export interface Task {
   id: number
   projectId: number
-  groupId: number | null
   goalId: number | null
   assigneeId: number | null
   title: string
@@ -242,7 +257,6 @@ export interface ProjectSummary {
   percent: number
   overdue: number
   byStatus: Record<WorkStatus, number>
-  groups: { groupId: number; name: string; color: string; total: number; done: number; percent: number }[]
   members: { userId: number; total: number; done: number; percent: number }[]
 }
 
@@ -252,7 +266,6 @@ export interface TaskInput {
   status: WorkStatus
   priority: Priority
   assigneeId: number | null
-  groupId: number | null
   goalId: number | null
   dueDate: string | null
 }
@@ -263,5 +276,6 @@ export interface ProjectInput {
   status: ProjectStatus
   startDate: string | null
   dueDate: string | null
-  memberIds: number[]
+  /** Required when creating; a project stays in the group it was created in. */
+  groupId: number | null
 }

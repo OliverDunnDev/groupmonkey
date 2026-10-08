@@ -27,7 +27,7 @@ whenever the API restarts), logins are seeded demo users, and there is no databa
 | Desktop packaging (Tauri/Electron) | Not started (web version was the first goal) |
 | CI | A GitHub Actions workflow is included (`.github/workflows/ci.yml`) but has not run on GitHub yet |
 
-Verified at hand-off: `dotnet test` 41 passing; `npm run build` and `npm run lint` clean.
+Verified at hand-off: `dotnet test` 54 passing; `npm run build` and `npm run lint` clean.
 
 ---
 
@@ -65,7 +65,7 @@ Open http://localhost:5173 and pick a demo user on the login page (all use passw
 **Check everything works**
 
 ```bash
-dotnet test                                  # 41 tests
+dotnet test                                  # 54 tests
 cd web && npm run build && npm run lint
 ```
 
@@ -92,7 +92,7 @@ CLAUDE.md                    context for Claude Code sessions
 src/GroupMonkey.Api/         .NET 10 minimal API
   Program.cs                 composition root: DI, JWT, CORS, Data Protection, route mapping
   Models/
-    Models.cs                core entities + enums (User, Project, Group, TaskItem, Goal)
+    Models.cs                core entities + enums (User, Group, Project, TaskItem, Goal)
     AiModels.cs              AI entities (AgentConfig, AgentRun, RunStep, ProposedAction, TaskComment) + AgentTools names
     Dtos.cs                  request/response records, including AI DTOs
   Data/
@@ -113,6 +113,7 @@ src/GroupMonkey.Api/         .NET 10 minimal API
 
 tests/GroupMonkey.Api.Tests/
   ApiTests.cs                core API behaviour (11 tests)
+  GroupTests.cs              groups: membership, visibility, project creation, assignment rules (13 tests)
   AiTests.cs                 AI feature + tool-layer safety (25 tests)
   ClaudeLoopTests.cs         real Claude loop against a FakeClaude server (5 tests)
 
@@ -125,7 +126,7 @@ web/                         React 19 + Vite 8 + TypeScript
     api/client.ts            fetch wrapper, token storage, error handling
     api/hooks.ts             ALL TanStack Query hooks (core + AI)
     components/              Shell, ui primitives, modals, TaskActivity, Approvals
-    pages/                   Login, Dashboard, ProjectPage (+ tabs), Agents, AiSettings
+    pages/                   Login, Dashboard, Groups (top level), ProjectPage (+ tabs), Agents, AiSettings
     styles/tokens.css        design tokens
     styles/global.css        every style in the app (single file, plain CSS)
 ```
@@ -172,35 +173,52 @@ Key decisions:
 | Entity | Notes |
 | --- | --- |
 | `User` | `Kind` is `Human` or `Agent`. Agents are users with no password and cannot log in. Passwords are **plain text** (mock only). |
-| `Project` | `OwnerId`, `MemberIds`, status (`Planning/Active/OnHold/Completed`), dates. |
-| `Group` | A team within a project; has `MemberIds`. Adding someone to a group also adds them to the project. |
-| `TaskItem` | `Status` (`Todo/InProgress/Review/Done`), `Priority`, optional `AssigneeId`, `GroupId`, `GoalId`, `DueDate`. |
-| `Goal` | Progress is **derived** from linked tasks (done / total). It stores no percentage. |
+| `Group` | **The top level.** A team: `Name`, `Description`, `Color`, `OwnerId` (the manager who created it), `MemberIds` (people, and agents when AI is on). Managers set groups up and choose the members. |
+| `Project` | Lives in **exactly one group** (`GroupId`, fixed at creation). `OwnerId` is the creator. It has **no member list of its own**: its members are its group's members (`DataStore.MembersOf`). Status `Planning/Active/OnHold/Completed`, dates. |
+| `TaskItem` | `Status` (`Todo/InProgress/Review/Done`), `Priority`, optional `AssigneeId` (must be a member of the project's group), `GoalId`, `DueDate`. |
+| `Goal` | Per project. Progress is **derived** from linked tasks (done / total). It stores no percentage. |
 
-Progress (`Services/Progress.cs`): project / group / goal percent = rounded `done / total` of the relevant tasks;
-`ProjectSummary` adds per-status counts, per-group and per-member breakdowns, and the overdue count
-(not Done and due before today).
+```
+Group (team + members)  ──┬─ Project ──┬─ Task  (assigned to a member of the group)
+                          │            └─ Goal  (progress from its tasks)
+                          └─ Project ...
+```
+
+This mirrors Azure DevOps-style structure. (An earlier version had "groups" as sub-teams *inside* a project; that concept was removed,
+and `Task.GroupId` no longer exists.)
+
+Progress (`Services/Progress.cs`): group / project / goal percent = rounded `done / total` of the relevant tasks (a group rolls up all its projects);
+`ProjectSummary` adds per-status counts, per-member workload (the group's members), and the overdue count (not Done and due before today).
 
 ### 5.2 Roles and access (`Services/Auth.cs`)
 
 | Rule | Who |
 | --- | --- |
-| `CanView` project | Admin, the owner, or a member |
-| `CanEdit` project (edit/delete project) | Admin or the owner |
-| `CanManage` (groups, goals, approvals, agent project membership) | `CanEdit`, or a **Manager** who is a project member |
-| Create a project | Admin or Manager (not Member). The creator becomes owner and member. |
-| Create/edit/move/delete tasks, comment | Anyone who can view the project |
-| AI settings | Admin only |
-| Create agents | Admin or Manager; edit/delete an agent: Admin, or the Manager who created it |
+Access is decided **by the group**; projects inherit it (`Access.CanView/CanManage/CanEdit(store, user, project)` just look up the project's group).
 
-Anything you cannot view returns **404** (not 403) so existence isn't leaked. Failing `CanManage`/`CanEdit` while able to view returns 403.
+| Rule | Who |
+| --- | --- |
+| `CanViewGroup` (and so see its projects, tasks, goals) | Admin, the group's owner, or a member |
+| `CanManageGroup` (change members, edit the group, create/edit/delete **projects** and **goals** in it, approve agent proposals, put agents in it) | Admin, the owner, or a **Manager** who is a member |
+| `CanEditGroup` (delete the group) | Admin or the owner only |
+| Create a group | Admin or Manager (not Member). The creator becomes owner and is added as a member. |
+| Create a project | Must `CanManageGroup` the target group |
+| Create/edit/move/delete tasks, comment | Anyone who can view the project (group members) |
+| Assign a task | Only to members of the project's group |
+| AI settings | Admin only |
+| Create agents | Admin or Manager (into groups they manage); edit/delete an agent: Admin, or the Manager who created it |
+
+Anything you cannot view returns **404** (not 403) so existence isn't leaked. Failing a manage/edit check while able to view returns 403.
+For projects, `Level.Edit` and `Level.Manage` are the same check (can manage the group).
+Removing someone from a group **unassigns their tasks** in that group's projects (the work itself is untouched). The owner can't be removed.
 
 ### 5.3 Endpoint conventions
 
 `ApiEndpoints.InProject(store, principal, projectId, level, (me, project) => result)` does: take the lock, resolve the
-current user, find the project, 404 if the user can't view it, 403 if they lack the required `Level`
-(`View` / `Manage` / `Edit`), then runs your delegate **inside the lock**. `ForTask` does the same starting from a task id
-(`ForGroup` / `ForGoal` exist for groups and goals). New project-scoped endpoints should use these, not hand-roll the checks.
+current user, find the project, 404 if the user can't view it (via its group), 403 if they lack the required `Level`
+(`View` / `Manage` / `Edit`), then runs your delegate **inside the lock**. `ForTask` does the same starting from a task id,
+`InGroup` does it for group endpoints, and `ForGoal` for goals. New endpoints should use these, not hand-roll the checks.
+Cascades live on the store: `DataStore.DeleteTask` / `DeleteProject` also remove comments, agent runs and proposals.
 
 ### 5.4 Endpoint reference
 
@@ -211,12 +229,15 @@ All routes are under `/api` and need a Bearer token unless marked anonymous.
 | `POST /auth/login` | email + password -> `{token, user}` | anonymous; humans only |
 | `GET /auth/me` | current user | any |
 | `GET /users` | all users (agents only while AI is on) | any |
-| `GET /projects`, `POST /projects` | list visible projects with progress; create | view / Admin+Manager |
-| `GET/PUT/DELETE /projects/{id}` | read, edit, delete (cascades) | view / Edit |
+| `GET /groups`, `POST /groups` | groups you belong to (with project/task rollups); create (owner = creator) | view / Admin+Manager |
+| `GET /groups/{id}` | one group | view |
+| `PUT /groups/{id}` | edit name/description/colour; `memberIds` replaces the member list (owner always kept) | Manage |
+| `DELETE /groups/{id}` | delete the group **and its projects**, tasks and goals | owner / Admin |
+| `POST/DELETE /groups/{id}/members/{userId}` | add / remove a member (removing unassigns their tasks) | Manage |
+| `GET /projects`, `POST /projects` | projects in groups you can see; create (body needs `groupId`) | view / Manage the group |
+| `GET /projects/{id}` | read (includes `groupId`, `groupName`, derived `memberIds`) | view |
+| `PUT/DELETE /projects/{id}` | edit (group can't change) / delete (cascades) | Manage |
 | `GET /projects/{id}/summary` | `ProjectSummary` | view |
-| `GET/POST /projects/{id}/groups` | list / create | view / Manage |
-| `PUT/DELETE /groups/{id}` | edit / delete (tasks become ungrouped) | Manage |
-| `POST/DELETE /groups/{id}/members/{userId}` | add / remove member | Manage |
 | `GET/POST /projects/{id}/tasks` | list / create (assigning to an agent starts a run) | view |
 | `PUT/DELETE /tasks/{id}` | edit / delete | view |
 | `PATCH /tasks/{id}/status`, `PATCH /tasks/{id}/assignee` | board drag; reassign (may start a run) | view |
@@ -237,7 +258,10 @@ All routes are under `/api` and need a Bearer token unless marked anonymous.
 Tests and docs rely on these ids, so change them with care:
 
 - Users: 1 Ava (Admin), 2 Marcus (Manager), 3 Priya, 4 Sam, **5 Scout** and **6 Patch** (agents).
-- Projects: 1 Website Relaunch (10 tasks, ids 1-10), 2 Mobile App v2 (tasks 11-18), 3 Internal Tooling (tasks 19-23; Scout/Patch are **not** members).
+- Groups: **1 Web Team** (owner Marcus; Ava, Marcus, Priya, Sam, Scout, Patch), **2 Mobile Team** (owner Marcus; Marcus, Priya, Sam, Scout, Patch),
+  **3 Platform & Ops** (owner Ava; Ava, Marcus, Sam; no agents).
+- Projects: 1 Website Relaunch (Web Team; tasks 1-10), 2 Mobile App v2 (Mobile Team; tasks 11-18), 3 Internal Tooling (Platform & Ops; tasks 19-23).
+  Priya sees projects 1 and 2; Sam and Marcus see all three; Ava (Admin) sees everything.
 - Task 7 "Write redirect map" is assigned to Scout and 17 "Device matrix test plan" to Patch, with a seeded run, comments, and one pending
   proposal (Scout wants to move task 7 to Review). Task 8 "Image optimisation pipeline" (Todo, assigned to Sam) is the usual test target.
 - Dates are relative to today, so the "1 overdue" in project 1 (Accessibility audit) stays true.
@@ -249,9 +273,9 @@ Tests and docs rely on these ids, so change them with care:
 ### 6.1 Structure and data flow
 
 - **Routing** (`App.tsx`): `/login`; everything else sits under `Shell` (sidebar + auth guard that redirects to `/login` and back).
-  `/projects/:id` renders `ProjectPage` with tab routes `index` (Overview), `board`, `groups`, `goals`. `/agents` and `/admin/ai` are the AI pages.
+  `/groups` is the top-level group page. `/projects/:id` renders `ProjectPage` with tab routes `index` (Overview), `board`, `goals`. `/agents` and `/admin/ai` are the AI pages.
 - **Server state is TanStack Query only.** There is no other global store. All hooks live in `api/hooks.ts`.
-  - Query-key convention: project data is `['p', projectId, <thing>]`, global lists are `['projects']` / `['users']`,
+  - Query-key convention: project data is `['p', projectId, <thing>]`, global lists are `['groups']` / `['projects']` / `['users']`,
     AI data is `['ai', ...]`. Mutations invalidate by prefix (`['p', id]`, `['ai']`) so one call refreshes related views.
   - `useMoveTask` is **optimistic** (board drags feel instant, roll back on error).
 - **API client** (`api/client.ts`): prefixes `/api` (or `VITE_API_URL`), attaches the token, turns non-2xx into `ApiError` with the server's
@@ -269,10 +293,17 @@ Rules of the look:
 
 - Palette: yellow `#FFD400`, black `#0A0A0A`, white, paper `#F4F1E8`, and **one** red `#E5251B` reserved for overdue/danger.
   Black text on yellow only.
+- **The page itself is yellow** (with a darker halftone). Content sits on it as **white cards**, **black strips/cards** and black-bordered controls, so
+  never put a yellow element straight on the page background (it disappears). Use the inverted variants instead: black title bar with yellow text
+  (`.title-bar`), `.card--accent` / `.stat--accent` (black with white/yellow text), `.group-head` (black strip). `.page-head .badge--yellow` is turned white for the same reason.
+  The focus ring is white for the same reason.
 - **Zero border radius** everywhere (`* { border-radius: 0 }`). Borders are heavy: 3px normally, 5px on cards.
 - **Hard offset shadows** (`6px 6px 0 #000`), never blurred. Buttons "press" on `:active` by translating and shrinking the shadow.
 - Display font **Bangers** for headings/buttons, **Archivo** for body (loaded from Google Fonts in `index.html`, with system fallbacks).
 - Halftone dot background, rotated "title bar" headings, speech-bubble empty states (`<Bubble>`), striped progress fills.
+- **Monkey theme, used sparingly:** `components/Monkey.tsx` has two flat SVGs, `MonkeyFace` (logo in the sidebar, login mascot peeking over the card, and peeking over every
+  `<Bubble>` empty state) and `Banana` (the reward for done work: "Bananas done" stat, the Done column header, the "Achieved" goal badge; pass `onDark` on black backgrounds so the outline stays visible).
+  Microcopy leans on it lightly ("troop" for groups, "No tasks on your branch", "SWINGING IN..." while loading). Keep it to a few touches; don't add monkeys to dense data views.
 - **AI agents** are always a **black square with a yellow "AI" tag** (`Avatar` in `components/ui.tsx`), never coloured like a person.
 
 Useful classes: `.card`, `.btn` (+ `--yellow --black --danger --sm`), `.badge`, `.chip`, `.progress`, `.stack`, `.row`, `.grid--cards`,
@@ -297,7 +328,7 @@ Because it is a user, assignment, project/group membership, workload and progres
 **Lifecycle of a run**
 
 1. A human assigns a task to an agent (create / edit / board assignee change), or presses **Run now**, or replies to an agent that asked a question.
-2. `AgentRunService.TryStart` checks: AI enabled, agent exists and is switched on, agent is a project member, no run already active for that task+agent,
+2. `AgentRunService.TryStart` checks: AI enabled, agent exists and is switched on, agent is a member of the project's group, no run already active for that task+agent,
    daily limit not reached. It creates an `AgentRun` (`Queued`) and queues its id.
 3. A background worker (max 4 concurrent) picks it up, chooses **Mock or Claude** at that moment (key present?), builds an `AgentRunContext`, and runs the model loop.
 4. The model calls tools via `ProjectTools`; every call and result is recorded as `RunStep`s.
@@ -314,7 +345,7 @@ Queued ─▶ Running ─┬─▶ Succeeded
 ### 7.2 Autonomy and tools
 
 `ProjectTools.Execute` is the **only** way agents touch data and the real security boundary (the prompt is not). Each call is rejected unless:
-the tool exists, is in the agent's allowed list (read tools are always allowed), the agent is a member of the run's project, and the call is scoped to that project.
+the tool exists, is in the agent's allowed list (read tools are always allowed), the agent is a member of the run's project's **group**, and the call is scoped to that one project.
 
 | Tool | Reads/changes | Notes |
 | --- | --- | --- |
@@ -322,7 +353,7 @@ the tool exists, is in the agent's allowed list (read tools are always allowed),
 | `add_comment` | comment | allowed at every autonomy level if the tool is enabled |
 | `request_human_input` | comment + pauses run | sets run to `NeedsInput` |
 | `update_task_status` | state change | only the agent's **own** tasks; `Done` only if **Autonomous** |
-| `create_task`, `assign_task` | state change | assignees must be **human** project members (agents can't delegate to agents) |
+| `create_task`, `assign_task` | state change | assignees must be **human** members of the project's group (agents can't delegate to agents) |
 
 State-changing tools by autonomy: **Suggest** -> refused (tell it to comment instead); **Ask first** -> validated, then stored as a `ProposedAction`
 for a manager to approve (applied later via the same code with `approved: true`); **Autonomous** -> applied immediately.
@@ -430,7 +461,7 @@ dotnet user-secrets set "Anthropic:ApiKey" "sk-ant-..." --project src/GroupMonke
 Roughly in the order I'd do them.
 
 1. **Run it against real Claude** and tune. Try each template. Watch token use per run (shown on the task). Expect to refine the system prompt in `ClaudeAgentModel.SystemPrompt`.
-2. **Persistence.** Replace `DataStore` with EF Core (SQLite to start, Postgres later). Mapping: entities already map almost 1:1; `List<int> MemberIds` becomes join tables;
+2. **Persistence.** Replace `DataStore` with EF Core (SQLite to start, Postgres later). Mapping: entities already map almost 1:1; `Group.MemberIds` becomes a join table;
    `AgentRun.Steps`/`ProposedAction.Args` can be JSON columns. Replace `lock(store.Sync)` with transactions; keep the `InProject`/`ForTask` shape so endpoints barely change.
    Persist runs and recover/fail `Running` runs on startup.
 3. **Real auth.** Hash passwords (ASP.NET `PasswordHasher`), registration/invites, refresh tokens or cookie auth, remove the demo quick-login, real `Jwt:Key` from secrets.

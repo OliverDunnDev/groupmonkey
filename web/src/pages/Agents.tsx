@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAgents, useAiStatus, useDeleteAgent, useProjects } from '../api/hooks'
+import { useAgents, useAiStatus, useDeleteAgent, useGroups } from '../api/hooks'
 import { useAuth } from '../auth'
 import AgentModal from '../components/AgentModal'
 import ApprovalsPanel from '../components/Approvals'
@@ -12,7 +12,7 @@ export default function Agents() {
   const status = useAiStatus()
   const enabled = status.data?.enabled === true
   const { data: agents, isLoading, error } = useAgents(enabled)
-  const { data: projects = [] } = useProjects()
+  const { data: groups = [] } = useGroups()
   const del = useDeleteAgent()
   const [modal, setModal] = useState<{ agent?: Agent } | null>(null)
 
@@ -50,7 +50,7 @@ export default function Agents() {
       <div className="grid grid--cards">
         {agents?.map((a) => {
           const autonomy = AUTONOMY_OPTIONS.find((o) => o.value === a.autonomy)
-          const names = projects.filter((p) => a.projectIds.includes(p.id)).map((p) => p.name)
+          const names = groups.filter((g) => a.groupIds.includes(g.id)).map((g) => g.name)
           return (
             <article key={a.userId} className="card stack">
               <div className="row" style={{ gap: 12, flexWrap: 'nowrap', alignItems: 'flex-start' }}>
@@ -68,7 +68,7 @@ export default function Agents() {
               </div>
 
               <dl className="facts">
-                <div><dt>Projects</dt><dd>{names.length ? names.join(', ') : 'None'}</dd></div>
+                <div><dt>Groups</dt><dd>{names.length ? names.join(', ') : 'None'}</dd></div>
                 <div><dt>Today</dt><dd>{a.runsToday}/{a.dailyRunLimit} runs</dd></div>
                 <div><dt>Last run</dt><dd>{a.lastRunStatus ? `${RUN_LABEL[a.lastRunStatus]} · ${relTime(a.lastRunAt)}` : 'Never'}</dd></div>
               </dl>

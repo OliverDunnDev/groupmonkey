@@ -8,11 +8,11 @@ export default function ApprovalsPanel({ hideWhenEmpty }: { hideWhenEmpty?: bool
   const users = useUserMap()
 
   if (items.length === 0) {
-    return hideWhenEmpty ? null : <Bubble>Nothing is waiting for your approval.</Bubble>
+    return hideWhenEmpty ? null : <Bubble>No approvals pending. The jungle is calm.</Bubble>
   }
 
   return (
-    <section className="card card--yellow stack" aria-label="Awaiting approval">
+    <section className="card card--accent stack" aria-label="Awaiting approval">
       <div className="row row--between">
         <h3>Awaiting your approval</h3>
         <span className="badge badge--black">{items.length}</span>

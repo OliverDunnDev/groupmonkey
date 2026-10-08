@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import type {
-  Agent, AgentInput, AgentTemplate, AiSettings, AiStatus, Comment, Goal, Group, ProposedAction, Project, ProjectInput,
+  Agent, AgentInput, AgentTemplate, AiSettings, AiStatus, Comment, Goal, Group, GroupInput, ProposedAction, Project, ProjectInput,
   ProjectSummary, Run, RunSummary, Task, TaskInput, User, WorkStatus,
 } from '../types'
 import { isActiveRun } from '../types'
@@ -14,7 +14,7 @@ export const keys = {
   project: (id: number) => ['p', id, 'project'] as const,
   summary: (id: number) => ['p', id, 'summary'] as const,
   tasks: (id: number) => ['p', id, 'tasks'] as const,
-  groups: (id: number) => ['p', id, 'groups'] as const,
+  groups: ['groups'] as const,
   goals: (id: number) => ['p', id, 'goals'] as const,
 }
 
@@ -26,8 +26,7 @@ export const useSummary = (id: number) =>
   useQuery({ queryKey: keys.summary(id), queryFn: () => api<ProjectSummary>(`/projects/${id}/summary`) })
 export const useTasks = (id: number) =>
   useQuery({ queryKey: keys.tasks(id), queryFn: () => api<Task[]>(`/projects/${id}/tasks`) })
-export const useGroups = (id: number) =>
-  useQuery({ queryKey: keys.groups(id), queryFn: () => api<Group[]>(`/projects/${id}/groups`) })
+export const useGroups = () => useQuery({ queryKey: keys.groups, queryFn: () => api<Group[]>('/groups') })
 export const useGoals = (id: number) =>
   useQuery({ queryKey: keys.goals(id), queryFn: () => api<Goal[]>(`/projects/${id}/goals`) })
 
@@ -36,6 +35,7 @@ function useRefresh(projectId?: number) {
   return () => {
     qc.invalidateQueries({ queryKey: projectId ? ['p', projectId] : ['p'] })
     qc.invalidateQueries({ queryKey: keys.projects })
+    qc.invalidateQueries({ queryKey: keys.groups })
     // Assigning a task can start an agent run; pick up the new run straight away.
     qc.invalidateQueries({ queryKey: ['ai'] })
   }
@@ -91,24 +91,22 @@ export function useMoveTask(projectId: number) {
   })
 }
 
-export function useSaveGroup(projectId: number, groupId?: number) {
-  const refresh = useRefresh(projectId)
+export function useSaveGroup(groupId?: number) {
+  const refresh = useRefresh()
   return useMutation({
-    mutationFn: (input: { name: string; color: string }) =>
-      groupId
-        ? api<Group>(`/groups/${groupId}`, { method: 'PUT', body: input })
-        : api<Group>(`/projects/${projectId}/groups`, { method: 'POST', body: input }),
+    mutationFn: (input: GroupInput) =>
+      groupId ? api<Group>(`/groups/${groupId}`, { method: 'PUT', body: input }) : api<Group>('/groups', { method: 'POST', body: input }),
     onSuccess: refresh,
   })
 }
 
-export function useDeleteGroup(projectId: number) {
-  const refresh = useRefresh(projectId)
+export function useDeleteGroup() {
+  const refresh = useRefresh()
   return useMutation({ mutationFn: (id: number) => api<void>(`/groups/${id}`, { method: 'DELETE' }), onSuccess: refresh })
 }
 
-export function useGroupMember(projectId: number) {
-  const refresh = useRefresh(projectId)
+export function useGroupMember() {
+  const refresh = useRefresh()
   return useMutation({
     mutationFn: ({ groupId, userId, add }: { groupId: number; userId: number; add: boolean }) =>
       api<Group>(`/groups/${groupId}/members/${userId}`, { method: add ? 'POST' : 'DELETE' }),
@@ -187,6 +185,7 @@ function useRefreshAi() {
     qc.invalidateQueries({ queryKey: ['p'] })
     qc.invalidateQueries({ queryKey: keys.projects })
     qc.invalidateQueries({ queryKey: keys.users })
+    qc.invalidateQueries({ queryKey: keys.groups })
   }
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import { useProject } from '../api/hooks'
 import ProjectModal from '../components/ProjectModal'
 import { ErrorBox, fmtDate, Loading } from '../components/ui'
@@ -25,6 +25,7 @@ export default function ProjectPage() {
           <h1 className="title-bar">{project.name}</h1>
           <p className="sub">{project.description}</p>
           <div className="row" style={{ marginTop: 10 }}>
+            <Link to="/groups" className="badge badge--yellow" title="The group this project belongs to">Group: {project.groupName}</Link>
             <span className="badge badge--black">{project.status}</span>
             <span className="badge">{fmtDate(project.startDate)} to {fmtDate(project.dueDate)}</span>
           </div>
@@ -35,7 +36,6 @@ export default function ProjectPage() {
       <nav className="tabs" aria-label="Project sections">
         <NavLink to="" end className="tab">Overview</NavLink>
         <NavLink to="board" className="tab">Board</NavLink>
-        <NavLink to="groups" className="tab">Groups</NavLink>
         <NavLink to="goals" className="tab">Goals</NavLink>
       </nav>
 

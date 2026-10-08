@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useDeleteTask, useGoals, useGroups, useSaveTask } from '../api/hooks'
+import { useDeleteTask, useGoals, useSaveTask } from '../api/hooks'
 import {
   PRIORITIES, STATUS_LABEL, WORK_STATUSES,
   type Priority, type Project, type Task, type WorkStatus,
@@ -14,7 +14,6 @@ export default function TaskModal({ project, task, defaultStatus, onClose }: {
   onClose: () => void
 }) {
   const users = useUserMap()
-  const { data: groups = [] } = useGroups(project.id)
   const { data: goals = [] } = useGoals(project.id)
   const save = useSaveTask(project.id, task?.id)
   const del = useDeleteTask(project.id)
@@ -24,7 +23,6 @@ export default function TaskModal({ project, task, defaultStatus, onClose }: {
   const [status, setStatus] = useState<WorkStatus>(task?.status ?? defaultStatus ?? 'Todo')
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 'Medium')
   const [assigneeId, setAssigneeId] = useState<number | null>(task?.assigneeId ?? null)
-  const [groupId, setGroupId] = useState<number | null>(task?.groupId ?? null)
   const [goalId, setGoalId] = useState<number | null>(task?.goalId ?? null)
   const [dueDate, setDueDate] = useState(task?.dueDate ?? '')
 
@@ -33,7 +31,7 @@ export default function TaskModal({ project, task, defaultStatus, onClose }: {
   function submit(e: FormEvent) {
     e.preventDefault()
     save.mutate(
-      { title, description, status, priority, assigneeId, groupId, goalId, dueDate: dueDate || null },
+      { title, description, status, priority, assigneeId, goalId, dueDate: dueDate || null },
       { onSuccess: onClose },
     )
   }
@@ -67,7 +65,7 @@ export default function TaskModal({ project, task, defaultStatus, onClose }: {
             </select>
           </div>
           <div className="field">
-            <label htmlFor="ta">Assignee</label>
+            <label htmlFor="ta">Assignee <span className="muted" style={{ textTransform: 'none', letterSpacing: 0 }}>(members of {project.groupName})</span></label>
             <select id="ta" className="select" value={assigneeId ?? ''} onChange={(e) => setAssigneeId(numOrNull(e.target.value))}>
               <option value="">Unassigned</option>
               {project.memberIds.map((id) => <option key={id} value={id}>{users.get(id)?.name ?? `User ${id}`}{users.get(id)?.kind === 'Agent' ? ' (AI agent)' : ''}</option>)}
@@ -76,13 +74,6 @@ export default function TaskModal({ project, task, defaultStatus, onClose }: {
           <div className="field">
             <label htmlFor="tdd">Due date</label>
             <input id="tdd" className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </div>
-          <div className="field">
-            <label htmlFor="tg">Group</label>
-            <select id="tg" className="select" value={groupId ?? ''} onChange={(e) => setGroupId(numOrNull(e.target.value))}>
-              <option value="">No group</option>
-              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
           </div>
           <div className="field">
             <label htmlFor="tgo">Goal</label>

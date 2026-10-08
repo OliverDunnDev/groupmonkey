@@ -12,16 +12,20 @@ public static class Progress
     {
         var tasks = s.Tasks.Where(t => t.ProjectId == p.Id).ToList();
         var done = tasks.Count(t => t.Status == WorkStatus.Done);
+        var group = s.GroupOf(p);
+        var manage = Access.CanManage(s, viewer, p);
         return new ProjectDto(p.Id, p.Name, p.Description, p.Status, p.StartDate, p.DueDate, p.OwnerId,
-            s.Visible(p.MemberIds), tasks.Count, done, Percent(done, tasks.Count),
-            Access.CanManage(viewer, p), Access.CanEdit(viewer, p));
+            p.GroupId, group?.Name ?? "", s.Visible(s.MembersOf(p)), tasks.Count, done, Percent(done, tasks.Count), manage, manage);
     }
 
-    public static GroupDto ToDto(DataStore s, Group g)
+    public static GroupDto ToDto(DataStore s, Group g, User viewer)
     {
-        var tasks = s.Tasks.Where(t => t.GroupId == g.Id).ToList();
+        var projectIds = s.Projects.Where(p => p.GroupId == g.Id).Select(p => p.Id).ToHashSet();
+        var tasks = s.Tasks.Where(t => projectIds.Contains(t.ProjectId)).ToList();
         var done = tasks.Count(t => t.Status == WorkStatus.Done);
-        return new GroupDto(g.Id, g.ProjectId, g.Name, g.Color, s.Visible(g.MemberIds), tasks.Count, done, Percent(done, tasks.Count));
+        return new GroupDto(g.Id, g.Name, g.Description, g.Color, g.OwnerId, s.Visible(g.MemberIds),
+            projectIds.Count, tasks.Count, done, Percent(done, tasks.Count),
+            Access.CanManageGroup(viewer, g), Access.CanEditGroup(viewer, g));
     }
 
     public static GoalDto ToDto(DataStore s, Goal g)
@@ -38,13 +42,7 @@ public static class Progress
         var done = tasks.Count(t => t.Status == WorkStatus.Done);
 
         var byStatus = Enum.GetValues<WorkStatus>().ToDictionary(st => st, st => tasks.Count(t => t.Status == st));
-        var groups = s.Groups.Where(g => g.ProjectId == p.Id).Select(g =>
-        {
-            var gt = tasks.Where(t => t.GroupId == g.Id).ToList();
-            var gd = gt.Count(t => t.Status == WorkStatus.Done);
-            return new GroupProgress(g.Id, g.Name, g.Color, gt.Count, gd, Percent(gd, gt.Count));
-        }).ToList();
-        var members = s.Visible(p.MemberIds).Select(uid =>
+        var members = s.Visible(s.MembersOf(p)).Select(uid =>
         {
             var mt = tasks.Where(t => t.AssigneeId == uid).ToList();
             var md = mt.Count(t => t.Status == WorkStatus.Done);
@@ -53,6 +51,6 @@ public static class Progress
         }).ToList();
 
         var overdue = tasks.Count(t => t.Status != WorkStatus.Done && t.DueDate is { } d && d < today);
-        return new ProjectSummary(p.Id, tasks.Count, done, Percent(done, tasks.Count), overdue, byStatus, groups, members);
+        return new ProjectSummary(p.Id, tasks.Count, done, Percent(done, tasks.Count), overdue, byStatus, members);
     }
 }

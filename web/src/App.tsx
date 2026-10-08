@@ -33,12 +33,12 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route element={<Shell />}>
               <Route index element={<Dashboard />} />
+              <Route path="groups" element={<Groups />} />
               <Route path="agents" element={<Agents />} />
               <Route path="admin/ai" element={<AiSettings />} />
               <Route path="projects/:id" element={<ProjectPage />}>
                 <Route index element={<Overview />} />
                 <Route path="board" element={<Board />} />
-                <Route path="groups" element={<Groups />} />
                 <Route path="goals" element={<Goals />} />
               </Route>
             </Route>

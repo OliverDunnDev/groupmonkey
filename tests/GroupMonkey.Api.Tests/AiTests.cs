@@ -103,6 +103,8 @@ public sealed class AiTests : IDisposable
 
         var project = (await mgr.GetFromJsonAsync<ProjectDto>("/api/projects/1", Json))!;
         Assert.DoesNotContain(Scout, project.MemberIds);
+        var groups = (await mgr.GetFromJsonAsync<List<GroupDto>>("/api/groups", Json))!;
+        Assert.All(groups, g => Assert.DoesNotContain(Scout, g.MemberIds));
 
         Assert.Equal(HttpStatusCode.NotFound, (await mgr.GetAsync("/api/agents")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await mgr.GetAsync("/api/approvals")).StatusCode);
@@ -128,6 +130,8 @@ public sealed class AiTests : IDisposable
         Assert.Contains(users, u => u.Id == Scout && u.Kind == UserKind.Agent);
         var project = (await mgr.GetFromJsonAsync<ProjectDto>("/api/projects/1", Json))!;
         Assert.Contains(Scout, project.MemberIds);
+        var group = (await mgr.GetFromJsonAsync<GroupDto>("/api/groups/1", Json))!;
+        Assert.Contains(Scout, group.MemberIds); // agents are group members, like people
 
         var agents = (await mgr.GetFromJsonAsync<List<AgentDto>>("/api/agents", Json))!;
         Assert.Equal(2, agents.Count);
@@ -224,7 +228,7 @@ public sealed class AiTests : IDisposable
             new AgentInput("Bolt", "Does quick drafts.", "Be brief.", null, Autonomy.Autonomous, null, null, null, [1], null), Json);
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var bolt = (await created.Content.ReadFromJsonAsync<AgentDto>(Json))!;
-        Assert.Contains(1, bolt.ProjectIds);
+        Assert.Contains(1, bolt.GroupIds);
 
         await Assign(mgr, 8, bolt.UserId);
         var runs = await WaitRuns(mgr, 8);
@@ -320,7 +324,7 @@ public sealed class AiTests : IDisposable
         var mgr = await app.As(Manager);
 
         var created = await mgr.PostAsJsonAsync("/api/projects/1/tasks",
-            new TaskInput("Draft launch note", "[ask] write the announcement", null, null, Scout, null, null, null), Json);
+            new TaskInput("Draft launch note", "[ask] write the announcement", null, null, Scout, null, null), Json);
         var task = (await created.Content.ReadFromJsonAsync<TaskItem>(Json))!;
 
         var first = Assert.Single(await WaitRuns(mgr, task.Id));
