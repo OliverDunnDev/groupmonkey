@@ -1,0 +1,7 @@
+bin/
+obj/
+node_modules/
+web/dist/
+# AI settings, including the encrypted API key and Data Protection key ring
+App_Data/
+*.user

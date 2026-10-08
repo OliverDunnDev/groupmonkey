@@ -1,0 +1,19 @@
+:root {
+  --yellow: #ffd400;
+  --yellow-deep: #ffb800;
+  --black: #0a0a0a;
+  --white: #ffffff;
+  --paper: #f4f1e8;
+  --red: #e5251b;
+
+  --border: 3px solid var(--black);
+  --border-heavy: 5px solid var(--black);
+  --shadow: 6px 6px 0 var(--black);
+  --shadow-sm: 3px 3px 0 var(--black);
+  --shadow-lg: 10px 10px 0 var(--black);
+
+  --font-display: 'Bangers', 'Impact', 'Arial Black', sans-serif;
+  --font-body: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+
+  --gutter: 16px;
+}
