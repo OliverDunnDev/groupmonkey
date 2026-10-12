@@ -1,8 +1,8 @@
 # GroupMonkey: notes for Claude Code
 
 Project management web app: .NET 10 minimal API (`src/GroupMonkey.Api`) + React 19/Vite/TypeScript (`web/`).
-Mock in-memory data. Optional AI-agents feature (Claude-powered teammates). **Read `DEVELOPING.md` first**: it has the
-architecture, conventions, recipes and gotchas. `README.md` is the short overview.
+Mock in-memory data. Optional AI-agents feature (Claude-powered teammates). **Read `DEVELOPING.md` Part B first** (Part A is a
+learning course for the human owner): it has the architecture, conventions, recipes and gotchas. `README.md` is the short overview.
 
 ## Commands
 

@@ -7,7 +7,7 @@ It also has an optional **AI agents** feature: Claude-powered teammates you can 
 
 **Live demo:** https://oliverdunndev.github.io/groupmonkey/ (the whole app running in your browser with sample data; nothing to install). See [the demo notes](DEVELOPING.md#14-the-static-demo-github-pages).
 
-Continuing development? Start with **[DEVELOPING.md](DEVELOPING.md)**: setup, architecture, conventions, gotchas and roadmap.
+Want to understand how it's built, or rebuild it yourself? **[DEVELOPING.md](DEVELOPING.md)** has a day-by-day, explain-it-like-I'm-12 course (Part A) plus the full reference: setup, architecture, rules, gotchas and roadmap (Part B).
 
 ## Run it
 
