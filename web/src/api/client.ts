@@ -38,34 +38,47 @@ export const UNAUTHORIZED_EVENT = 'groupmonkey:unauthorized'
 
 export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
   const token = tokenStore.get()
-  let res: Response
-  try {
-    res = await fetch(`${BASE}/api${path}`, {
-      method: init.method ?? 'GET',
-      headers: {
-        ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-    })
-  } catch {
-    throw new ApiError(0, 'Cannot reach the API. Is it running? (dotnet run --project src/GroupMonkey.Api)')
+  let status: number
+  let data: unknown
+
+  if (__DEMO__) {
+    // Static demo: the whole API runs in the browser (see src/demo). The import is dead-code eliminated from normal builds.
+    const { handle } = await import('../demo/server')
+    const res = await handle(init.method ?? 'GET', path, init.body, token)
+    status = res.status
+    data = res.data
+  } else {
+    let res: Response
+    try {
+      res = await fetch(`${BASE}/api${path}`, {
+        method: init.method ?? 'GET',
+        headers: {
+          ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+      })
+    } catch {
+      throw new ApiError(0, 'Cannot reach the API. Is it running? (dotnet run --project src/GroupMonkey.Api)')
+    }
+    status = res.status
+    try {
+      data = status === 204 ? undefined : await res.json()
+    } catch {
+      data = undefined // no body
+    }
   }
 
-  if (res.status === 401 && !path.startsWith('/auth/login')) {
+  if (status === 401 && !path.startsWith('/auth/login')) {
     tokenStore.clear()
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
   }
-  if (!res.ok) {
-    let message = res.statusText || 'Request failed'
-    try {
-      const data = await res.json()
-      if (data?.error) message = data.error
-    } catch {
-      /* no body */
-    }
-    if (res.status === 403) message = "You don't have permission to do that."
-    throw new ApiError(res.status, message)
+  if (status >= 400) {
+    let message = 'Request failed'
+    const error = (data as { error?: string } | undefined)?.error
+    if (error) message = error
+    if (status === 403) message = "You don't have permission to do that."
+    throw new ApiError(status, message)
   }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
+  return data as T
 }

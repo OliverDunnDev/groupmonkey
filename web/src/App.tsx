@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ApiError } from './api/client'
 import { AuthProvider } from './auth'
+import { isDemo } from './demo/flag'
 import Shell from './components/Shell'
 import Board from './pages/Board'
 import Agents from './pages/Agents'
@@ -24,10 +25,13 @@ const queryClient = new QueryClient({
   },
 })
 
+// Static hosting can't rewrite deep links to index.html, so the demo uses hash URLs (#/projects/1).
+const Router = isDemo ? HashRouter : BrowserRouter
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <Router>
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -45,7 +49,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
-      </BrowserRouter>
+      </Router>
     </QueryClientProvider>
   )
 }

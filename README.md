@@ -5,6 +5,8 @@ Project management app. **Groups** are teams that managers set up with chosen me
 
 It also has an optional **AI agents** feature: Claude-powered teammates you can assign tasks to. See [AI agents](#ai-agents-optional).
 
+**Live demo:** https://oliverdunndev.github.io/groupmonkey/ (the whole app running in your browser with sample data; nothing to install). See [the demo notes](DEVELOPING.md#14-the-static-demo-github-pages).
+
 Continuing development? Start with **[DEVELOPING.md](DEVELOPING.md)**: setup, architecture, conventions, gotchas and roadmap.
 
 ## Run it

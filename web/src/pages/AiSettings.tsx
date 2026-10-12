@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useAiSettings, useSaveAiSettings, useTestAi } from '../api/hooks'
 import { useAuth } from '../auth'
+import { isDemo } from '../demo/flag'
 import { Bubble, ErrorBox, Loading } from '../components/ui'
 import { MODEL_LABEL } from '../types'
 
@@ -83,7 +84,13 @@ export default function AiSettings() {
             )}
           </p>
 
-          <form className="stack" onSubmit={saveKey}>
+          {isDemo && (
+            <div className="alert alert--info">
+              This is the static demo, so API keys can't be entered (never paste a real key into a site like this). Agents give scripted replies.
+              To run real Claude agents, run the app locally and add your key there.
+            </div>
+          )}
+          <form className="stack" onSubmit={saveKey} hidden={isDemo}>
             <div className="field">
               <label htmlFor="apikey">{s.hasKey ? 'Replace key' : 'API key'}</label>
               <input id="apikey" className="input" type="password" autoComplete="off" spellCheck={false} placeholder="sk-ant-..." value={key} onChange={(e) => setKey(e.target.value)} />

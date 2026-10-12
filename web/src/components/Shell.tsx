@@ -1,6 +1,7 @@
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAgentWatcher, useAiStatus, useApprovals, useGroups, useProjects } from '../api/hooks'
 import { useAuth } from '../auth'
+import DemoBanner from './DemoBanner'
 import { MonkeyFace } from './Monkey'
 import { Avatar, Loading } from './ui'
 
@@ -59,6 +60,7 @@ export default function Shell() {
         </div>
       </aside>
       <main className="main">
+        <DemoBanner />
         <Outlet />
       </main>
     </div>

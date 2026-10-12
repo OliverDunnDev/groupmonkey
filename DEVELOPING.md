@@ -6,7 +6,7 @@ the traps already hit, and where to take it next. For a short overview and the d
 Contents: [1 Status](#1-status) · [2 Setup](#2-setup-on-a-new-machine) · [3 Repo map](#3-repo-map) · [4 Architecture](#4-architecture) ·
 [5 Backend](#5-backend) · [6 Frontend](#6-frontend) · [7 AI agents](#7-ai-agents) · [8 Testing](#8-testing) ·
 [9 Gotchas](#9-gotchas-and-lessons-learned) · [10 Configuration](#10-configuration-reference) · [11 Roadmap](#11-roadmap) ·
-[12 Recipes](#12-recipes) · [13 Troubleshooting](#13-troubleshooting)
+[12 Recipes](#12-recipes) · [13 Troubleshooting](#13-troubleshooting) · [14 Static demo](#14-the-static-demo-github-pages)
 
 ---
 
@@ -25,7 +25,8 @@ whenever the API restarts), logins are seeded demo users, and there is no databa
 | Persistence (database) | Not started |
 | Real auth (hashing, registration, SSO) | Not started |
 | Desktop packaging (Tauri/Electron) | Not started (web version was the first goal) |
-| CI | A GitHub Actions workflow is included (`.github/workflows/ci.yml`) but has not run on GitHub yet |
+| Static demo on GitHub Pages (API re-implemented in the browser; see section 14) | Built and verified locally, incl. a 585-check parity test against the real API. Needs Pages switched on in repo settings. |
+| CI | Workflows included (`ci.yml`: tests, web build, demo parity; `pages.yml`: demo deploy) but not yet run on GitHub |
 
 Verified at hand-off: `dotnet test` 54 passing; `npm run build` and `npm run lint` clean.
 
@@ -87,7 +88,8 @@ GroupMonkey.slnx
 README.md                    short overview + demo walkthrough
 DEVELOPING.md                this file
 CLAUDE.md                    context for Claude Code sessions
-.github/workflows/ci.yml     build + test + lint on push/PR
+.github/workflows/ci.yml     build + test + lint + demo-parity check on push/PR
+.github/workflows/pages.yml  builds the static demo and deploys it to GitHub Pages
 
 src/GroupMonkey.Api/         .NET 10 minimal API
   Program.cs                 composition root: DI, JWT, CORS, Data Protection, route mapping
@@ -127,6 +129,7 @@ web/                         React 19 + Vite 8 + TypeScript
     api/hooks.ts             ALL TanStack Query hooks (core + AI)
     components/              Shell, ui primitives, modals, TaskActivity, Approvals
     pages/                   Login, Dashboard, Groups (top level), ProjectPage (+ tabs), Agents, AiSettings
+    demo/                    the static demo's in-browser API (db.ts seed + store, server.ts routes, flag.ts)
     styles/tokens.css        design tokens
     styles/global.css        every style in the app (single file, plain CSS)
 ```
@@ -489,6 +492,8 @@ using `LoginAs`, then a type in `web/src/types.ts` and a hook in `web/src/api/ho
 3. Add it to `TOOL_OPTIONS` in `web/src/types.ts` if it should be switchable per agent.
 4. Tests: scoping + autonomy cases in `AiTests`, and assert it appears in the request in `ClaudeLoopTests` if relevant.
 
+**Change API behaviour.** Also update `web/src/demo/` to match and run `npm run parity` (section 14); CI fails if they drift.
+
 **Add an agent template.** Append to `Templates` in `Endpoints/AiEndpoints.cs`. It appears in the New agent dialog automatically.
 
 **Add a model provider.** Implement `IAgentModel`, select it in `AgentRunService.Process` (where Mock vs Claude is chosen), expose its mode in `AiSettingsStore.Mode`.
@@ -510,3 +515,52 @@ using `LoginAs`, then a type in `web/src/types.ts` and a hook in `web/src/api/ho
 | A run is stuck "Working" | The API restarted mid-run (runs are in memory) or the model call hung; cancel it on the task and run again. |
 | `dotnet build` can't copy the DLL | See gotcha 1. |
 | Fonts look different | Offline: Google Fonts failed to load, fallbacks (Impact / system sans) are used. |
+
+---
+
+## 14. The static demo (GitHub Pages)
+
+GitHub Pages only serves static files, so it can't run the .NET API. The demo is the **same React app with the API re-implemented in the
+browser**, built with Vite's `demo` mode. Nothing leaves the visitor's machine; each visitor gets their own private copy of the sample data,
+and it resets on reload (they stay "logged in" because only a token is stored).
+
+**How it works**
+
+- `npm run build:demo` runs `vite build --mode demo`. `vite.config.ts` turns `__DEMO__` on and switches to relative asset paths (`base: './'`)
+  so it works under any Pages sub-path (e.g. `/groupmonkey/`).
+- `src/demo/flag.ts` exports `isDemo`. In `api/client.ts`, when `isDemo` the request goes to `src/demo/server.ts` (`handle(method, path, body, token)`)
+  instead of `fetch`. The import is dynamic and the flag is a build-time constant, so **normal builds contain none of the demo code** (checked).
+- `src/demo/db.ts` is the in-memory store and seed data (a TypeScript copy of `Data/DataStore.cs` + `Data/SeedData.cs`).
+  `src/demo/server.ts` has the routes, the access rules (`Services/Auth.cs`), the DTO shapes (`Services/Progress.cs`) and the scripted agent runs
+  (`Ai/AgentModels.cs` `MockAgentModel` + `Ai/ProjectTools.cs`), with real timers so the UI shows an agent "working".
+- Routing uses `HashRouter` in the demo (`#/projects/1`), because static hosting can't rewrite deep links to `index.html`.
+- A **LIVE DEMO banner** (`components/DemoBanner.tsx`) makes clear it isn't the real app. **API keys are refused** in the demo (the key box is hidden and the
+  server returns an error): never encourage pasting a real key into a static site.
+- Try it locally: `cd web && npm run dev:demo` (dev server, demo mode) or `npm run build:demo && npx vite preview`.
+
+**Publishing** (one-time setup, then it is automatic)
+
+1. The repo must be **public** (GitHub Pages on private repos needs a paid plan).
+2. GitHub: **Settings > Pages > Build and deployment > Source: GitHub Actions**.
+3. Push to `main` (or run the *Deploy demo to GitHub Pages* workflow from the Actions tab). `.github/workflows/pages.yml` builds `web/` in demo mode and deploys
+   `web/dist`. The site appears at `https://<user>.github.io/<repo>/` (for this repo: https://oliverdunndev.github.io/groupmonkey/).
+   It only runs when something under `web/` or the workflow changes.
+
+**The rule: the demo is a second implementation, so keep it in step.** When you change the .NET API's behaviour, response shapes, access rules, seed data
+or the mock agent, make the matching change in `src/demo/`. The guard is `web/scripts/demo-parity.mjs` (`npm run parity`): it runs one long sequence of requests
+(every read endpoint for all four users in five states, plus group/project/task/goal/agent/approval mutations, permission errors, and real mock agent runs
+including the needs-input flow) against **both** the real API and the demo server, then diffs every response. At hand-off it was **585 comparisons, 0 mismatches**.
+CI runs it on every push (`demo-parity` job in `ci.yml`).
+
+To run it yourself, start a **fresh** API (the check needs untouched seed data) and then the script:
+
+```bash
+dotnet run --project src/GroupMonkey.Api --no-launch-profile --urls http://localhost:5081 --Ai:DataDir=/tmp/gm-parity --Ai:ForceMock=true --Ai:MockDelayMs=50
+```
+
+```bash
+cd web && npm run parity
+```
+
+Intentional differences (normalised in the script): the demo refuses API keys, and its scripted reply wording says "run the app locally". JSON encoding differences
+(.NET escapes quotes inside embedded JSON as a unicode escape) are treated as equal. The demo files avoid enums and use explicit `.ts` import paths so Node can run them directly (Node 22.18+/24).

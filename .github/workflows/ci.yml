@@ -15,6 +15,30 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet test --configuration Release
 
+  # The GitHub Pages demo re-implements the API in TypeScript; this fails if the two ever disagree.
+  demo-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Start a fresh API
+        run: |
+          dotnet run --project src/GroupMonkey.Api --no-launch-profile --urls http://localhost:5081 \
+            --Ai:DataDir="$RUNNER_TEMP/gm-parity" --Ai:ForceMock=true --Ai:MockDelayMs=50 > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 90); do curl -s -o /dev/null http://localhost:5081/api/ai/status && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/api.log"; exit 1
+      - run: npm ci
+        working-directory: web
+      - run: npm run parity
+        working-directory: web
+
   web:
     runs-on: ubuntu-latest
     defaults:

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import DemoBanner from '../components/DemoBanner'
 import { MonkeyFace } from '../components/Monkey'
 import { useAuth } from '../auth'
 
@@ -40,6 +41,7 @@ export default function Login() {
 
   return (
     <div className="login">
+      <div className="login-demo"><DemoBanner /></div>
       <div className="card login-card stack">
         <span className="login-monkey-wrap"><MonkeyFace /></span>
         <div className="brand">GroupMonkey</div>

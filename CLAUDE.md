@@ -11,6 +11,7 @@ dotnet run --project src/GroupMonkey.Api     # API on :5080
 cd web && npm install && npm run dev         # UI on :5173 (proxies /api)
 dotnet test                                  # 54 tests; must stay green
 cd web && npm run build && npm run lint      # must stay clean
+cd web && npm run build:demo                 # static demo build (needs a fresh API on :5081 for `npm run parity`)
 ```
 
 If the build says the DLL is locked, an API is running: stop it or use `dotnet test --artifacts-path <dir>`.
@@ -27,5 +28,6 @@ If the build says the DLL is locked, an API is running: stop it or use `dotnet t
   Don't read the bare `ANTHROPIC_API_KEY` env var (deliberate).
 - **Tests must not call the real API.** AI tests use `Ai:ForceMock` and `FakeClaude`; keep it that way. Extend `ClaudeLoopTests` when changing the Claude loop.
 - Seed ids are relied on by tests (see DEVELOPING.md 5.5).
+- **The GitHub Pages demo is a second implementation of the API** in `web/src/demo/`. If you change API behaviour, response shapes, access rules, seed data or the mock agent, change `src/demo/` to match and run `npm run parity` (DEVELOPING.md section 14). The demo must refuse API keys.
 - Before changing Claude SDK code or model ids, check the current docs/skill for the C# SDK; compare SDK enums with `==`, not `ToString()`.
 - Don't commit `App_Data/` (settings and encrypted key).

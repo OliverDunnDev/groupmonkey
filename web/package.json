@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:demo": "vite --mode demo",
+    "build:demo": "tsc -b && vite build --mode demo",
+    "parity": "node scripts/demo-parity.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
